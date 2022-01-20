@@ -1,2 +1,2 @@
 # imgsampler
-small program to paint images with images, controled with text
+Small program to paint images with images, controlled with text.

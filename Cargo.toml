@@ -1,0 +1,14 @@
+[package]
+name = "imgsampler"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Required for wgpu v0.10 feature resolution.
+resolver = "2"
+
+[dependencies]
+nannou = "0.18"
+nannou_conrod = "0.18"
+rand = "0.8"
