@@ -1,5 +1,5 @@
 use nannou::prelude::{Rect, *};
-use nannou::image::open;
+use nannou::image::{open, GenericImageView};
 use nannou_conrod as ui;
 use nannou_conrod::prelude::*;
 
@@ -10,6 +10,8 @@ use rand::Rng;
 #[derive(Debug)]
 enum ImgParams {
     Position(f32, f32),
+    Size(f32, f32),
+    Crop(f32, f32, f32, f32),
     Blur(f32),
     Opacity(f32),
     Scatter(f32),
@@ -23,6 +25,7 @@ fn main() {
 struct Model {
     textures: HashMap<String, wgpu::Texture>,
     positions: HashMap<String, ImgParams>,
+    sizes: HashMap<String, ImgParams>,
     parameters: HashMap<String, Vec<ImgParams>>,
     ids: Ids,
     draw_id: WindowId,
@@ -39,6 +42,8 @@ widget_ids! {
 }
 
 fn model(app: &App) -> Model {
+    // this currently doesn't have any effect
+    app.set_loop_mode(LoopMode::rate_fps(24.0));
     // Create a window.
     let draw_id = app.new_window().title("sampler").build().unwrap();
 
@@ -62,6 +67,7 @@ fn model(app: &App) -> Model {
         textures: HashMap::new(),
         positions: HashMap::new(),
         parameters: HashMap::new(),
+	sizes: HashMap::new(),
         ids,
         draw_id,
         ui_id,
@@ -86,6 +92,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         model.text = value;
         let mut parameters = HashMap::<String, Vec<ImgParams>>::new();
         let mut positions = HashMap::<String, ImgParams>::new();
+	let mut sizes = HashMap::<String, ImgParams>::new();
         let mut img_names = Vec::new();
         let lines = model.text.split('\n');
         for line in lines {
@@ -116,6 +123,43 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                                         );
                                     }
                                 }
+                            }
+                        }
+                    }
+		    "size" => {
+                        if let Some(x_str) = tokens.next() {
+                            if let Some(y_str) = tokens.next() {
+                                if let Ok(x) = x_str.parse::<f32>() {
+                                    if let Ok(y) = y_str.parse::<f32>() {
+                                        sizes.insert(
+                                            cur_name.to_string(),
+                                            ImgParams::Size(x, y),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+		    "crop" => {
+                        if let Some(x_str) = tokens.next() {
+                            if let Some(y_str) = tokens.next() {
+				if let Some(w_str) = tokens.next() {
+				    if let Some(h_str) = tokens.next() {
+					if let Ok(x) = x_str.parse::<f32>() {
+					    if let Ok(y) = y_str.parse::<f32>() {
+						if let Ok(w) = w_str.parse::<f32>() {
+						    if let Ok(h) = h_str.parse::<f32>() {
+							if w != 0.0 && h != 0.0 {
+							    if let Some(param_vec) = parameters.get_mut(cur_name) {
+								param_vec.push(ImgParams::Crop(x,y,w,h));
+							    }
+							}														
+						    }
+						}
+					    }
+					}
+				    }
+				}
                             }
                         }
                     }
@@ -162,12 +206,31 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         let mut textures = HashMap::new();
         for name in img_names.drain(..) {
             let img_path = model.asset_path.join("images").join(name);
-            if let Ok(image) = open(img_path) {		
+            if let Ok(mut image) = open(img_path) {
+				
+		for param in parameters[name].iter() {
+		    match param {
+			ImgParams::Blur(f) => {
+			    image = image.blur(*f);
+			}
+			ImgParams::Crop(x,y,w,h) => {
+			    image = image.crop(
+				(*x * image.width() as f32) as u32,
+				(*y * image.height() as f32) as u32,
+				(*w * image.width() as f32) as u32,
+				(*h * image.height() as f32) as u32,
+			    )
+			}
+			_ => {}
+		    }
+		}
+		
                 textures.insert(name.to_string(), wgpu::Texture::from_image(app, &image));                
             }
         }
         model.textures = textures;
         model.positions = positions;
+	model.sizes = sizes;
         model.parameters = parameters;
     }
 
@@ -183,10 +246,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
         for par in params.iter() {
             match par {
-                ImgParams::Scatter(f) => {
-                    x *= f;
-                    y *= f;
-                }
+                
                 ImgParams::Brownian(f) => {
                     let mut rng = rand::thread_rng();
                     let thresh_x: f64 = rng.gen();
@@ -202,6 +262,13 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                     } else {
                         y -= f;
                     }
+                }
+		ImgParams::Scatter(f) => {
+		    let mut rng = rand::thread_rng();
+		    let scatter_x: f32 = rng.gen::<f32>() * *f;
+		    let scatter_y: f32 = rng.gen::<f32>() * *f;
+                    x *= scatter_x;
+                    y *= scatter_y;
                 }
                 _ => {}
             }
@@ -224,7 +291,11 @@ fn view(app: &App, model: &Model, frame: Frame) {
         }
         id if id == model.draw_id => {
             for (n, t) in model.textures.iter() {
-                let r = Rect::from_w_h(100.0_f32, 100.0_f32);
+                let r = if let Some(ImgParams::Size(xp, yp)) = model.sizes.get(n) {
+		    Rect::from_w_h(*xp, *yp)
+		} else {
+		    Rect::from_w_h(50.0_f32, 50.0_f32)
+		};
 
                 if let Some(ImgParams::Position(xp, yp)) = model.positions.get(n) {
                     draw.texture(&t).x(*xp).y(*yp).wh(r.wh());
