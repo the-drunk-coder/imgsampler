@@ -108,7 +108,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .w_h(1000.0, 200.0)
         .set(model.ids.text, ui)
     {
-        // go stateless for once
+	// go stateless for once
         model.text = value;
         let mut parameters = HashMap::<String, Vec<ImgParams>>::new();
         let mut positions = HashMap::<String, ImgParams>::new();
@@ -123,6 +123,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
             // parse line
             if let Ok((_, mut token_vec)) = line_parser::parse_line(line) {
+		model.textures.clear();
                 // "interpret" tokens
                 let mut itokens: Vec<InterpretedToken> = Vec::new();
                 for token in token_vec.drain(..) {
@@ -263,7 +264,10 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         model.parameters = parameters;
     }
 
-    model.textures.clear();
+    if model.textures.len() >= 400 {
+	model.textures.clear();
+    }
+    
     for (n, source_image) in model.images.iter() {
         let mut image = source_image.clone();
 
