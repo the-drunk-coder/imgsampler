@@ -41,7 +41,6 @@ struct Model {
     positions: HashMap<String, ImgParams>,
     sizes: HashMap<String, ImgParams>,
     parameters: HashMap<String, Vec<ImgParams>>,
-    frame_count: usize,
     ids: Ids,
     draw_id: WindowId,
     ui_id: WindowId,
@@ -60,12 +59,16 @@ fn model(app: &App) -> Model {
     // this currently doesn't have any effect
     //app.set_loop_mode(LoopMode::rate_fps(24.0));
     // Create a window.
-    let draw_id = app.new_window().title("sampler").build().unwrap();
+    let draw_id = app
+        .new_window()
+        .title("sampler")
+        .raw_event(raw_window_event)
+        .build()
+        .unwrap();
 
     let ui_id = app
         .new_window()
         .title("code")
-        .transparent(true)
         .raw_event(raw_window_event)
         .build()
         .unwrap();
@@ -84,7 +87,6 @@ fn model(app: &App) -> Model {
         positions: HashMap::new(),
         parameters: HashMap::new(),
         sizes: HashMap::new(),
-        frame_count: 0,
         ids,
         draw_id,
         ui_id,
@@ -204,7 +206,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                         InterpretedToken::String(ref val) if val == "size" => {
                             if let Some(InterpretedToken::Par(px)) = idrain.next() {
                                 if let Some(InterpretedToken::Par(py)) = idrain.next() {
-                                    println!("insert {} size", cur_name);
                                     sizes.insert(cur_name.to_string(), ImgParams::Size(px, py));
                                 }
                             }
