@@ -123,7 +123,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
             // parse line
             if let Ok((_, mut token_vec)) = line_parser::parse_line(line) {
-		model.textures.clear();
+		
                 // "interpret" tokens
                 let mut itokens: Vec<InterpretedToken> = Vec::new();
                 for token in token_vec.drain(..) {
@@ -258,13 +258,15 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             }
         }
 
+	model.textures.clear();
+	
         model.images = images;
         model.positions = positions;
         model.sizes = sizes;
         model.parameters = parameters;
     }
 
-    if model.textures.len() >= 400 {
+    if model.textures.len() >= 500 {
 	model.textures.clear();
     }
     
