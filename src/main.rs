@@ -1,7 +1,7 @@
 mod line_parser;
 mod parameter;
 
-use nannou::image::{open, DynamicImage, GenericImageView};
+use nannou::image::{open, DynamicImage, GenericImageView, Pixel};
 use nannou::prelude::*;
 use nannou_conrod as ui;
 use nannou_conrod::prelude::*;
@@ -108,7 +108,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         .w_h(1000.0, 200.0)
         .set(model.ids.text, ui)
     {
-	// go stateless for once
+        // go stateless for once
         model.text = value;
         let mut parameters = HashMap::<String, Vec<ImgParams>>::new();
         let mut positions = HashMap::<String, ImgParams>::new();
@@ -123,7 +123,6 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
             // parse line
             if let Ok((_, mut token_vec)) = line_parser::parse_line(line) {
-		
                 // "interpret" tokens
                 let mut itokens: Vec<InterpretedToken> = Vec::new();
                 for token in token_vec.drain(..) {
@@ -258,8 +257,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             }
         }
 
-	model.textures.clear();
-	
+        model.textures.clear();
+
         model.images = images;
         model.positions = positions;
         model.sizes = sizes;
@@ -267,9 +266,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     }
 
     if model.textures.len() >= 500 {
-	model.textures.clear();
+        model.textures.clear();
     }
-    
+
     for (n, source_image) in model.images.iter() {
         let mut image = source_image.clone();
 
@@ -301,6 +300,15 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                             ((w.get_next() + 0.01) * image.width() as f32) as u32,
                             ((h.get_next() + 0.01) * image.height() as f32) as u32,
                         )
+                    }
+                    ImgParams::Opacity(o) => {
+                        let val = o.get_next();
+                        let mut ibuf = image.clone().into_rgba8();
+
+                        for p in ibuf.pixels_mut() {
+                            *p = p.map_with_alpha(|x| x, |a| 0);
+                        }
+			image = DynamicImage::ImageRgba8(ibuf);
                     }
                     ImgParams::Brownian(f) => {
                         let mut rng = rand::thread_rng();
