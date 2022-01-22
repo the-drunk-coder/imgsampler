@@ -31,7 +31,7 @@ fn main() {
 }
 
 struct Model {
-    images: Vec<String>,
+    images: HashMap<String, DynamicImage>,
     textures: Vec<(wgpu::Texture, f32, f32, f32, f32)>,
     positions: HashMap<String, ImgParams>,
     sizes: HashMap<String, ImgParams>,   
@@ -74,7 +74,7 @@ fn model(app: &App) -> Model {
 
     // Load the image from disk and upload it to a GPU texture.
     Model {
-	images: Vec::new(),
+	images: HashMap::new(),
         textures: Vec::new(),
         positions: HashMap::new(),	
         parameters: HashMap::new(),
@@ -106,7 +106,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         let mut parameters = HashMap::<String, Vec<ImgParams>>::new();
         let mut positions = HashMap::<String, ImgParams>::new();
 	let mut sizes = HashMap::<String, ImgParams>::new();
-	let mut images = Vec::new();
+	let mut images = HashMap::<String, DynamicImage>::new();
 	
         let lines = model.text.split('\n');
         for line in lines {
@@ -158,8 +158,14 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 		while let Some(t) = idrain.next() {
                     match t {
 			InterpretedToken::String(ref val) if val == "img" => {
-                            if let Some(InterpretedToken::String(name)) = idrain.next() {				
-				images.push(name.clone());
+                            if let Some(InterpretedToken::String(name)) = idrain.next() {
+				let img_path = model.asset_path.join("images").join(name.clone());
+				if let Ok(image) = open(img_path) {
+				    images.insert(name.clone(), image);
+				} else {
+				    break;
+				}
+				
 				cur_name = name.clone();
 				parameters.insert(cur_name.to_string(), Vec::<ImgParams>::new());
                             }
@@ -239,18 +245,18 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     }
     
     model.textures.clear();
-    for n in model.images.iter() {
-
-	let img_path = model.asset_path.join("images").join(n.clone());
+    for (n, source_image) in model.images.iter() {
+	let mut image = source_image.clone();
+	
 
 	let mut x = 0.0_f32;
         let mut y = 0.0_f32;
 	let mut w = 50.0_f32;
         let mut h = 50.0_f32;
 	
-	if let Ok(mut image) = open(img_path) {
-	    
-	    if let Some(params) = model.parameters.get_mut(n) {	    
+
+	
+	if let Some(params) = model.parameters.get_mut(n) {	    
 
             if let Some(ImgParams::Position(xp, yp)) = model.positions.get_mut(n) {
 		x = xp.get_next();
@@ -303,8 +309,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                     _ => {}
 		}
 	    }
-	     
-	  // to be save ...
+	    
+	    // to be save ...
 	    if w == 0.0 {
 		w = 1.0;
 	    }
@@ -312,18 +318,15 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 		h = 1.0;
 	    }
 	}
-	println!("{} {} {} {} {}", n, x, y, w, h);
+	//println!("{} {} {} {} {}", n, x, y, w, h);
 
         model.textures.push((wgpu::Texture::from_image(app, &image), x, y, w, h));    
-	} else {
-	    continue;
-	}
 
 	
 
 	
 	
-	            
+	
     }
     
     
@@ -341,9 +344,14 @@ fn view(app: &App, model: &Model, frame: Frame) {
             model.ui.draw_to_frame(app, &frame).unwrap();
         }
         id if id == model.draw_id => {
-            for (t, x, y, w, h) in model.textures.iter() {              
-                draw.texture(&t).x(*x).y(*y).wh(Vec2::new(*w, *h));                
-            }
+	    if model.textures.is_empty() {
+		draw.background().color(BLACK);
+	    } else {
+		for (t, x, y, w, h) in model.textures.iter() {              
+                    draw.texture(&t).x(*x).y(*y).wh(Vec2::new(*w, *h));                
+		}
+	    }
+            
             draw.to_frame(app, &frame).unwrap();
         }
         _ => {}
