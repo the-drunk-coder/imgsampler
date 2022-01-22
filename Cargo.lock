@@ -915,6 +915,7 @@ version = "0.1.0"
 dependencies = [
  "nannou",
  "nannou_conrod",
+ "nom",
  "rand 0.8.4",
 ]
 

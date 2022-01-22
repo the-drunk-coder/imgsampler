@@ -1,21 +1,29 @@
+mod parameter;
+mod line_parser;
+
 use nannou::prelude::{Rect, *};
 use nannou::image::{open, GenericImageView};
 use nannou_conrod as ui;
 use nannou_conrod::prelude::*;
-
 use std::collections::HashMap;
-
 use rand::Rng;
 
-#[derive(Debug)]
+use line_parser::ParserResult;
+use parameter::*;
+
 enum ImgParams {
-    Position(f32, f32),
-    Size(f32, f32),
-    Crop(f32, f32, f32, f32),
-    Blur(f32),
-    Opacity(f32),
-    Scatter(f32),
-    Brownian(f32),
+    Position(Box<dyn Parameter>, Box<dyn Parameter>),
+    Size(Box<dyn Parameter>, Box<dyn Parameter>),
+    Crop(Box<dyn Parameter>, Box<dyn Parameter>, Box<dyn Parameter>, Box<dyn Parameter>),
+    Blur(Box<dyn Parameter>),
+    Opacity(Box<dyn Parameter>),
+    Scatter(Box<dyn Parameter>),
+    Brownian(Box<dyn Parameter>),
+}
+
+enum InterpretedToken {
+    String(String),
+    Par(Box<dyn Parameter>)
 }
 
 fn main() {
@@ -26,6 +34,8 @@ struct Model {
     textures: HashMap<String, wgpu::Texture>,
     positions: HashMap<String, ImgParams>,
     sizes: HashMap<String, ImgParams>,
+    final_positions: HashMap<String, (f32, f32)>,
+    final_sizes: HashMap<String, (f32, f32)>,
     parameters: HashMap<String, Vec<ImgParams>>,
     ids: Ids,
     draw_id: WindowId,
@@ -42,11 +52,12 @@ widget_ids! {
 }
 
 fn model(app: &App) -> Model {
+
     // this currently doesn't have any effect
     app.set_loop_mode(LoopMode::rate_fps(24.0));
     // Create a window.
     let draw_id = app.new_window().title("sampler").build().unwrap();
-
+    
     let ui_id = app
         .new_window()
         .title("code")
@@ -66,8 +77,10 @@ fn model(app: &App) -> Model {
     Model {
         textures: HashMap::new(),
         positions: HashMap::new(),
+	final_positions: HashMap::new(),
         parameters: HashMap::new(),
 	sizes: HashMap::new(),
+	final_sizes: HashMap::new(),
         ids,
         draw_id,
         ui_id,
@@ -100,130 +113,146 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                 continue;
             }
 
-            let mut tokens = line.split(' ');
-
-            let mut cur_name = "";
-            while let Some(t) = tokens.next() {
-                match t {
-                    "img" => {
-                        if let Some(name) = tokens.next() {
-                            img_names.push(name.clone());
-                            cur_name = name.clone();
-                            parameters.insert(cur_name.to_string(), Vec::<ImgParams>::new());
-                        }
-                    }
-                    "pos" => {
-                        if let Some(x_str) = tokens.next() {
-                            if let Some(y_str) = tokens.next() {
-                                if let Ok(x) = x_str.parse::<f32>() {
-                                    if let Ok(y) = y_str.parse::<f32>() {
-                                        positions.insert(
-                                            cur_name.to_string(),
-                                            ImgParams::Position(x, y),
-                                        );
-                                    }
-                                }
+            if let Ok((_, mut token_vec)) = line_parser::parse_line(line) {
+		// "interpret" tokens
+		let mut itokens:Vec<InterpretedToken> = Vec::new();
+		for token in token_vec.drain(..) {
+		    match token {
+			ParserResult::String(val) => {
+			    itokens.push(InterpretedToken::String(val));
+			}
+			ParserResult::Scalar(val) => {
+			    itokens.push(InterpretedToken::Par(Box::new(StaticParameter::from_val(val))));
+			}
+			ParserResult::Bounce(seq) => {
+			    if seq.len() == 3 {
+				itokens.push(InterpretedToken::Par(Box::new(BounceParameter::from_params(seq[0], seq[1], seq[2]))));
+			    } else if seq.len() == 2 {
+				itokens.push(InterpretedToken::Par(Box::new(BounceParameter::from_params(seq[0], seq[1], 6000.0))));
+			    } else {
+				itokens.push(InterpretedToken::Par(Box::new(BounceParameter::from_params(0.0, 1.0, 6000.0))));
+			    }
+			}
+			ParserResult::Ramp(seq) => {
+			    if seq.len() == 3 {
+				itokens.push(InterpretedToken::Par(Box::new(RampParameter::from_params(seq[0], seq[1], seq[2]))));
+			    } else if seq.len() == 2 {
+				itokens.push(InterpretedToken::Par(Box::new(RampParameter::from_params(seq[0], seq[1], 6000.0))));
+			    } else {
+				itokens.push(InterpretedToken::Par(Box::new(RampParameter::from_params(0.0, 1.0, 6000.0))));
+			    }
+			}
+			ParserResult::Choose(seq) => {
+			    itokens.push(InterpretedToken::Par(Box::new(ChooseParameter::from_seq(&seq))));
+			}
+			ParserResult::Cycle(seq) => {
+			    itokens.push(InterpretedToken::Par(Box::new(CycleParameter::from_seq(&seq))));
+			}
+		    }
+		}
+		
+		let mut cur_name:String = "".to_owned();
+		let mut idrain = itokens.drain(..);
+		while let Some(t) = idrain.next() {
+                    match t {
+			InterpretedToken::String(ref val) if val == "img" => {
+                            if let Some(InterpretedToken::String(name)) = idrain.next() {
+				img_names.push(name.clone());
+				cur_name = name.clone();
+				parameters.insert(cur_name.to_string(), Vec::<ImgParams>::new());
                             }
-                        }
-                    }
-		    "size" => {
-                        if let Some(x_str) = tokens.next() {
-                            if let Some(y_str) = tokens.next() {
-                                if let Ok(x) = x_str.parse::<f32>() {
-                                    if let Ok(y) = y_str.parse::<f32>() {
-                                        sizes.insert(
-                                            cur_name.to_string(),
-                                            ImgParams::Size(x, y),
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-		    "crop" => {
-                        if let Some(x_str) = tokens.next() {
-                            if let Some(y_str) = tokens.next() {
-				if let Some(w_str) = tokens.next() {
-				    if let Some(h_str) = tokens.next() {
-					if let Ok(x) = x_str.parse::<f32>() {
-					    if let Ok(y) = y_str.parse::<f32>() {
-						if let Ok(w) = w_str.parse::<f32>() {
-						    if let Ok(h) = h_str.parse::<f32>() {
-							if w != 0.0 && h != 0.0 {
-							    if let Some(param_vec) = parameters.get_mut(cur_name) {
-								param_vec.push(ImgParams::Crop(x,y,w,h));
-							    }
-							}														
-						    }
-						}
+			}
+			InterpretedToken::String(ref val) if val == "pos" => {
+                            if let Some(InterpretedToken::Par(px)) = idrain.next() {
+				if let Some(InterpretedToken::Par(py)) = idrain.next() {                                    
+                                    positions.insert(
+					cur_name.to_string(),
+					ImgParams::Position(px, py),
+                                    );
+				}
+			    }
+			}
+			InterpretedToken::String(ref val) if val == "size" => {
+			    if let Some(InterpretedToken::Par(px)) = idrain.next() {
+				if let Some(InterpretedToken::Par(py)) = idrain.next() {                                    
+                                    sizes.insert(
+					cur_name.to_string(),
+					ImgParams::Size(px, py),
+                                    );
+				}
+			    }                            
+			}
+			InterpretedToken::String(ref val) if val == "crop" => {
+			    if let Some(InterpretedToken::Par(px)) = idrain.next() {
+				if let Some(InterpretedToken::Par(py)) = idrain.next() {                                    
+                                    if let Some(InterpretedToken::Par(pw)) = idrain.next() {
+					if let Some(InterpretedToken::Par(ph)) = idrain.next() {
+					    if let Some(param_vec) = parameters.get_mut(&cur_name) {
+						param_vec.push(ImgParams::Crop(px, py, pw, ph));
 					    }
 					}
-				    }
+				    } 
 				}
+			    }                             
+			}
+			InterpretedToken::String(ref val) if val == "scatter" => {
+                            if let Some(InterpretedToken::Par(f)) = idrain.next() {				
+                                if let Some(param_vec) = parameters.get_mut(&cur_name) {
+					param_vec.push(ImgParams::Scatter(f));
+                                }				
                             }
-                        }
-                    }
-                    "scatter" => {
-                        if let Some(factor_str) = tokens.next() {
-                            if let Ok(factor) = factor_str.parse::<f32>() {
-                                if let Some(param_vec) = parameters.get_mut(cur_name) {
-                                    param_vec.push(ImgParams::Scatter(factor));
-                                }
+			}
+			InterpretedToken::String(ref val) if val == "blur" => {
+			    if let Some(InterpretedToken::Par(f)) = idrain.next() {				
+                                if let Some(param_vec) = parameters.get_mut(&cur_name) {
+				    param_vec.push(ImgParams::Blur(f));
+                                }				
+                            }                            
+			}
+			InterpretedToken::String(ref val) if val == "opacity" => {
+			    if let Some(InterpretedToken::Par(f)) = idrain.next() {				
+                                if let Some(param_vec) = parameters.get_mut(&cur_name) {
+				    param_vec.push(ImgParams::Opacity(f));
+                                }				
+                            }                            
+			}
+			InterpretedToken::String(ref val) if val == "brownian" => {
+                            if let Some(InterpretedToken::Par(f)) = idrain.next() {				
+                                if let Some(param_vec) = parameters.get_mut(&cur_name) {
+				    param_vec.push(ImgParams::Brownian(f));
+                                }				
                             }
-                        }
+			}
+			_ => {}
                     }
-                    "blur" => {
-                        if let Some(factor_str) = tokens.next() {
-                            if let Ok(factor) = factor_str.parse::<f32>() {
-                                if let Some(param_vec) = parameters.get_mut(cur_name) {
-                                    param_vec.push(ImgParams::Blur(factor));
-                                }
-                            }
-                        }
-                    }
-                    "opacity" => {
-                        if let Some(factor_str) = tokens.next() {
-                            if let Ok(factor) = factor_str.parse::<f32>() {
-                                if let Some(param_vec) = parameters.get_mut(cur_name) {
-                                    param_vec.push(ImgParams::Opacity(factor));
-                                }
-                            }
-                        }
-                    }
-                    "brownian" => {
-                        if let Some(factor_str) = tokens.next() {
-                            if let Ok(factor) = factor_str.parse::<f32>() {
-                                if let Some(param_vec) = parameters.get_mut(cur_name) {
-                                    param_vec.push(ImgParams::Brownian(factor));
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
+		}
+	    }
+
+            
         }
         let mut textures = HashMap::new();
         for name in img_names.drain(..) {
-            let img_path = model.asset_path.join("images").join(name);
+            let img_path = model.asset_path.join("images").join(name.clone());
             if let Ok(mut image) = open(img_path) {
-				
-		for param in parameters[name].iter() {
-		    match param {
-			ImgParams::Blur(f) => {
-			    image = image.blur(*f);
+		if let Some(params) = parameters.get_mut(&name) {
+		    for param in params.iter_mut() {
+			match param {
+			    ImgParams::Blur(f) => {
+				image = image.blur(f.get_next());
+			    }
+			    ImgParams::Crop(x,y,w,h) => {
+				image = image.crop(
+				    ((x.get_next() + 0.01) * image.width() as f32) as u32,
+				    ((y.get_next() + 0.01) * image.height() as f32) as u32,
+				    ((w.get_next() + 0.01) * image.width() as f32) as u32,
+				    ((h.get_next() + 0.01) * image.height() as f32) as u32,
+				)
+			    }
+			    _ => {}
 			}
-			ImgParams::Crop(x,y,w,h) => {
-			    image = image.crop(
-				(*x * image.width() as f32) as u32,
-				(*y * image.height() as f32) as u32,
-				(*w * image.width() as f32) as u32,
-				(*h * image.height() as f32) as u32,
-			    )
-			}
-			_ => {}
 		    }
 		}
+		
 		
                 textures.insert(name.to_string(), wgpu::Texture::from_image(app, &image));                
             }
@@ -235,16 +264,23 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     }
 
     // update positions
-    for (n, params) in model.parameters.iter() {
+    for (n, params) in model.parameters.iter_mut() {
         let mut x = 0.0_f32;
         let mut y = 0.0_f32;
+	let mut w = 50.0_f32;
+        let mut h = 50.0_f32;
 
-        if let Some(ImgParams::Position(xp, yp)) = model.positions.get(n) {
-            x = *xp;
-            y = *yp;
+        if let Some(ImgParams::Position(xp, yp)) = model.positions.get_mut(n) {
+            x = xp.get_next();
+            y = yp.get_next();
+        }
+	
+	if let Some(ImgParams::Size(wp, hp)) = model.sizes.get_mut(n) {
+            w = wp.get_next();
+            h = hp.get_next();
         }
 
-        for par in params.iter() {
+        for par in params.iter_mut() {
             match par {
                 
                 ImgParams::Brownian(f) => {
@@ -252,34 +288,43 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                     let thresh_x: f64 = rng.gen();
                     let thresh_y: f64 = rng.gen();
 
+		    let val = f.get_next();
                     if thresh_x < 0.5 {
-                        x += f;
+                        x += val;
                     } else {
-                        x -= f;
+                        x -= val;
                     }
                     if thresh_y < 0.5 {
-                        y += f;
+                        y += val;
                     } else {
-                        y -= f;
+                        y -= val;
                     }
                 }
 		ImgParams::Scatter(f) => {
 		    let mut rng = rand::thread_rng();
-		    let scatter_x: f32 = rng.gen::<f32>() * *f;
-		    let scatter_y: f32 = rng.gen::<f32>() * *f;
+		    let val = f.get_next();
+		    let scatter_x: f32 = rng.gen::<f32>() * val;
+		    let scatter_y: f32 = rng.gen::<f32>() * val;
                     x *= scatter_x;
                     y *= scatter_y;
                 }
                 _ => {}
             }
         }
-        model
-            .positions
-            .insert(n.to_string(), ImgParams::Position(x, y));
+	// to be save ...
+	if w == 0.0 {
+	    w = 1.0;
+	}
+	if h == 0.0 {
+	    h = 1.0;
+	}
+	model.final_positions.insert(n.to_string(), (x,y));
+	model.final_sizes.insert(n.to_string(), (w,h));
     }
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
+    
     let draw = app.draw();
 
     match frame.window_id() {
@@ -291,13 +336,13 @@ fn view(app: &App, model: &Model, frame: Frame) {
         }
         id if id == model.draw_id => {
             for (n, t) in model.textures.iter() {
-                let r = if let Some(ImgParams::Size(xp, yp)) = model.sizes.get(n) {
+                let r = if let Some((xp, yp)) = model.final_sizes.get(n) {
 		    Rect::from_w_h(*xp, *yp)
 		} else {
 		    Rect::from_w_h(50.0_f32, 50.0_f32)
 		};
 
-                if let Some(ImgParams::Position(xp, yp)) = model.positions.get(n) {
+                if let Some((xp, yp)) = model.final_positions.get(n) {
                     draw.texture(&t).x(*xp).y(*yp).wh(r.wh());
                 } else {
                     draw.texture(&t).x(0.0).y(0.0).wh(r.wh());
