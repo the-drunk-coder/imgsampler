@@ -22,6 +22,9 @@ enum ImgParams {
     ),
     Blur(Box<dyn Parameter>),
     Opacity(Box<dyn Parameter>),
+    Brighten(Box<dyn Parameter>),
+    HueRot(Box<dyn Parameter>),
+    Contrast(Box<dyn Parameter>),    
     Scatter(Box<dyn Parameter>),
     Brownian(Box<dyn Parameter>),
 }
@@ -237,6 +240,27 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                                 }
                             }
                         }
+			InterpretedToken::String(ref val) if val == "brighten" => {
+                            if let Some(InterpretedToken::Par(f)) = idrain.next() {
+                                if let Some(param_vec) = parameters.get_mut(&cur_name) {
+                                    param_vec.push(ImgParams::Brighten(f));
+                                }
+                            }
+                        }
+			InterpretedToken::String(ref val) if val == "huerot" => {
+                            if let Some(InterpretedToken::Par(f)) = idrain.next() {
+                                if let Some(param_vec) = parameters.get_mut(&cur_name) {
+                                    param_vec.push(ImgParams::HueRot(f));
+                                }
+                            }
+                        }
+			InterpretedToken::String(ref val) if val == "contrast" => {
+                            if let Some(InterpretedToken::Par(f)) = idrain.next() {
+                                if let Some(param_vec) = parameters.get_mut(&cur_name) {
+                                    param_vec.push(ImgParams::Contrast(f));
+                                }
+                            }
+                        }
                         InterpretedToken::String(ref val) if val == "opacity" => {
                             if let Some(InterpretedToken::Par(f)) = idrain.next() {
                                 if let Some(param_vec) = parameters.get_mut(&cur_name) {
@@ -292,6 +316,15 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                 match param {
                     ImgParams::Blur(f) => {
                         image = image.blur(f.get_next());
+                    }
+		    ImgParams::Brighten(f) => {
+                        image = image.brighten(f.get_next() as i32);
+                    }
+		    ImgParams::Contrast(f) => {
+                        image = image.adjust_contrast(f.get_next());
+                    }
+		    ImgParams::HueRot(f) => {
+                        image = image.huerotate(f.get_next() as i32);
                     }
                     ImgParams::Crop(x, y, w, h) => {
                         image = image.crop(
