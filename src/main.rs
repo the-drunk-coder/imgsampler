@@ -306,7 +306,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
                         let mut ibuf = image.clone().into_rgba8();
 
                         for p in ibuf.pixels_mut() {
-                            *p = p.map_with_alpha(|x| x, |a| 0);
+                            *p = p.map_with_alpha(|x| x, |a| (a as f32 * val) as u8);
                         }
 			image = DynamicImage::ImageRgba8(ibuf);
                     }
