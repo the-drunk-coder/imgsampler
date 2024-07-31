@@ -19,13 +19,13 @@ pub enum ParserResult {
     Cycle(Vec<f32>),
 }
 
-fn parse_param<'a>(i: &'a str) -> IResult<&'a str, ParserResult, VerboseError<&'a str>> {
+fn parse_param(i: &str) -> IResult<&str, ParserResult, VerboseError<&str>> {
     alt((
-        map(parse_float, |f| ParserResult::Scalar(f)),
+        map(parse_float, ParserResult::Scalar),
         delimited(
             tag("["),
             alt((
-                map(parse_float, |f| ParserResult::Scalar(f)),
+                map(parse_float, ParserResult::Scalar),
                 map(
                     separated_pair(
                         tag("ramp"),
@@ -64,7 +64,7 @@ fn parse_param<'a>(i: &'a str) -> IResult<&'a str, ParserResult, VerboseError<&'
     ))(i)
 }
 
-fn parse_float<'a>(i: &'a str) -> IResult<&'a str, f32, VerboseError<&'a str>> {
+fn parse_float(i: &str) -> IResult<&str, f32, VerboseError<&str>> {
     map_res(recognize(float), |digit_str: &str| digit_str.parse::<f32>())(i)
 }
 
@@ -73,13 +73,13 @@ fn valid_char(chr: char) -> bool {
     chr == '_' || chr == '.' || chr == '-' || is_alphanumeric(chr as u8)
 }
 
-fn parse_string<'a>(i: &'a str) -> IResult<&'a str, ParserResult, VerboseError<&'a str>> {
+fn parse_string(i: &str) -> IResult<&str, ParserResult, VerboseError<&str>> {
     map(take_while(valid_char), |desc_str: &str| {
         ParserResult::String(desc_str.to_string())
     })(i)
 }
 
-pub fn parse_line<'a>(i: &'a str) -> IResult<&'a str, Vec<ParserResult>, VerboseError<&'a str>> {
+pub fn parse_line(i: &str) -> IResult<&str, Vec<ParserResult>, VerboseError<&str>> {
     separated_list1(tag(" "), alt((parse_param, parse_string)))(i)
 }
 

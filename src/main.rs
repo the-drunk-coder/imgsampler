@@ -1,7 +1,6 @@
 mod line_parser;
 mod parameter;
 
-use nannou::event::KeyboardInput;
 use nannou::image::{open, DynamicImage, GenericImageView, Pixel};
 use nannou::prelude::*;
 use nannou_egui::{self, egui, Egui};
