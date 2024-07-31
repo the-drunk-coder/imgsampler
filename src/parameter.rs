@@ -30,7 +30,7 @@ pub struct ChooseParameter {
 }
 
 impl ChooseParameter {
-    pub fn from_seq(seq: &Vec<f32>) -> Self {
+    pub fn from_seq(seq: &[f32]) -> Self {
         ChooseParameter {
             items: seq.to_vec(),
         }
@@ -56,7 +56,7 @@ pub struct CycleParameter {
 }
 
 impl CycleParameter {
-    pub fn from_seq(seq: &Vec<f32>) -> Self {
+    pub fn from_seq(seq: &[f32]) -> Self {
         CycleParameter {
             items: seq.to_vec(),
             index: 0,
@@ -95,7 +95,7 @@ impl RampParameter {
             min,
             inc: (max - min) / steps,
             steps,
-            step_count: (0.0),
+            step_count: 0.0,
         }
     }
 }
@@ -133,7 +133,7 @@ impl BounceParameter {
             range: max - min,
             degree_inc: dec_inc,
             steps,
-            step_count: (0.0),
+            step_count: 0.0,
         }
     }
 }
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_bounce_gen() {
-        let mut bounce_gen = BounceParameter::from_params((20.0), (200.0), (10.0));
+        let mut bounce_gen = BounceParameter::from_params(20.0, 200.0, 10.0);
         let mut results = Vec::new();
         for _ in 0..10 {
             results.push(bounce_gen.get_next());
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_ramp_gen() {
-        let mut ramp_gen = RampParameter::from_params((20.0), (200.0), (10.0));
+        let mut ramp_gen = RampParameter::from_params(20.0, 200.0, 10.0);
         let mut results = Vec::new();
         for _ in 0..10 {
             results.push(ramp_gen.get_next());
