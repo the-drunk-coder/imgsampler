@@ -92,9 +92,9 @@ pub struct RampParameter {
 impl RampParameter {
     pub fn from_params(min: f32, max: f32, steps: f32) -> Self {
         RampParameter {
-            min: min,
+            min,
             inc: (max - min) / steps,
-            steps: steps,
+            steps,
             step_count: (0.0).into(),
         }
     }
@@ -129,10 +129,10 @@ impl BounceParameter {
         let mut dec_inc: f32 = (360.0).into();
         dec_inc = dec_inc / steps;
         BounceParameter {
-            min: min,
+            min,
             range: max - min,
             degree_inc: dec_inc,
-            steps: steps,
+            steps,
             step_count: (0.0).into(),
         }
     }
